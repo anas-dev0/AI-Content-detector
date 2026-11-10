@@ -9,7 +9,10 @@ Facts were checked by web search on **2026-11-10**. Anything that could not be c
 ### Community Forensics (CF): `TRAIN` (Small) / `TEST` (Eval)
 - Paper: Park & Owens, *Community Forensics: Using Thousands of Generators to Train Fake Image Detectors*, CVPR 2025. https://arxiv.org/abs/2411.04125
 - **CF-Small**: https://huggingface.co/datasets/OwensLab/CommunityForensics-Small
-  - The card states 278K generated + 278K real images, but the dataset viewer estimates ~356K rows. The discrepancy is unexplained; count ourselves in week 1.
+  - **Measured (week 1 index):** 556,541 rows = 278,445 fake + 278,096 real, matching the card. The viewer's "356K" estimate was wrong. 186 Parquet files (`data/HFCF_small_<n>.parquet`, ~1.4 GB each), **each a single row group**: reading any image downloads that file's whole image column. Files are grouped by generator.
+  - **Measured:** subsets are only `Systematic` (4,763 SD-derivative generators, ~41 images each) and `Manual` (19 older models), plus `Real`. **There is no commercial subset in Small.** The commercial models (Midjourney, DALL·E, Imagen 3, Firefly, Ideogram, FLUX) are in the eval set's metadata, so they are test-only for us.
+  - **Measured:** `real_source` is `N/A` for every real image. The real dataset of origin (COCO/FFHQ/VISION/LHQ) is not recorded per image.
+  - **Measured shortcuts in raw data:** see `docs/audit_raw_cf_small.md`. Reals are 45% JPEG vs 2.2% of fakes; 83% of fakes are exactly 512×512. A size-only classifier reaches AUROC 0.997. Fixed by the matched pool (`scripts/build_pool.py`, `docs/audit_pool_v1_train.md`).
   - Listed size **260 GB**. The card warns downloads "may use up to ~600GB".
   - Generators come from 4,803 models, the vast majority Stable Diffusion derivatives (the authors note this bias). Subsets: systematic, manual, commercial.
   - Real images come from FFHQ, VISION, COCO and Landscapes HQ.
@@ -27,7 +30,7 @@ Facts were checked by web search on **2026-11-10**. Anything that could not be c
   - Downloads: Baidu Netdisk, plus an **official Google Drive folder** added 2024-03-15. The Drive link is on the repo README, so we don't need Baidu.
 - Unofficial HF mirrors (convenient but **not official**, so verify file counts against the paper): https://huggingface.co/datasets/bitmind/GenImage_ADM (and the sibling `bitmind/GenImage_*` repos), https://huggingface.co/datasets/nebula/GenImage-arrow
 - Generators: Midjourney, SD v1.4, SD v1.5, ADM, GLIDE, Wukong, VQDM, BigGAN. Reals: ImageNet (1,000 classes).
-- Licence: the repo has a LICENSE file whose terms we have not read, so **UNVERIFIED**. Assume research-only.
+- Licence: the repo README links a LICENSE file, but `raw.githubusercontent.com/GenImage-Dataset/GenImage/main/LICENSE` returned 404 on 2026-11-10, so it is still **UNVERIFIED**. Action: open the repo page in a browser. Assume research-only.
 - **Known bias**: reals are ImageNet JPEGs, while most fakes are PNG, and image sizes differ. Detectors learn "JPEG vs PNG" (Grommelt et al., https://arxiv.org/abs/2403.17608). Our shortcut audit must catch this. Mitigation: identical JPEG re-encoding for both classes, and crops instead of resizing.
 
 ### AI-GenBench: `TEST` (newest windows only)
@@ -41,7 +44,7 @@ Facts were checked by web search on **2026-11-10**. Anything that could not be c
 ### NTIRE 2026 Robust AIGI Detection in the Wild: `TEST` (if released)
 - Overview: Gushchin et al., CVPRW 2026. https://arxiv.org/abs/2604.11487. Challenge page: https://cvlai.net/ntire/2026/
 - 108,750 real + 185,750 generated images, 42 generators, 36 transformations (crop, resize, compression, blur). Test generators include recent proprietary models.
-- **Public release after the challenge: UNVERIFIED.** The paper gives no dataset URL. Week-1 task: check the challenge page / Codabench. If unavailable, drop it. No plan item depends on it.
+- **Public release after the challenge: UNVERIFIED.** The paper gives no dataset URL. Week-1 check (2026-11-10): the challenge page links to Codabench, https://www.codabench.org/competitions/12761/, where data access requires registration. No statement on post-challenge availability. Action: register and check whether the data is still downloadable. If not, drop it. No plan item depends on it.
 
 ### Chameleon (AIDE): `TEST` (if access granted)
 - Paper: Yan et al., *A Sanity Check for AI-generated Image Detection*, ICLR 2025. https://arxiv.org/abs/2406.19435. Repo: https://github.com/shilinyan99/AIDE
@@ -51,7 +54,7 @@ Facts were checked by web search on **2026-11-10**. Anything that could not be c
 ### Our own "2026 set": `TEST`
 - **Fakes**: ~300 images per generator, 2–3 generators.
   - **Qwen-Image**: Apache-2.0, 20B params, weights released 2025-08-04, https://huggingface.co/Qwen/Qwen-Image. Run on a Kaggle T4 with CPU offload/quantisation. Feasibility is **UNVERIFIED** and gets tested in week 1.
-  - Fallback: **FLUX.1-schnell** (Apache-2.0, https://huggingface.co/black-forest-labs/FLUX.1-schnell). It is likely already "seen" via CF/NTIRE, so it is less useful as "unseen". Check CF's `model_name` list.
+  - Fallback: **FLUX.1-schnell** (Apache-2.0, https://huggingface.co/black-forest-labs/FLUX.1-schnell). **Confirmed in CF's eval metadata** (`data/metadata/eval_set_metadata.csv`), so it is already a CF-Eval test generator. It is not in our training data, but it adds little as a "new" generator. Prefer another Apache/MIT model not listed in CF.
   - Plus **1–2 commercial generators through their free web UI** (e.g. Gemini or ChatGPT image generation), **only if their current terms allow research use of outputs**. Read and archive the ToS text in `docs/` before generating.
 - **Reals**: our own phone photos. **No people in frame.** EXIF is kept in the raw copy and stripped in the shared copy.
 - **Caption matching**: write a caption for each real photo, then generate one fake per caption per generator. Both classes go through the same storage path: original bytes kept, format recorded.

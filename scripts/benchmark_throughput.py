@@ -1,0 +1,127 @@
+"""Throughput / VRAM benchmark per architecture (PLAN.md week 1, Person A).
+
+Random weights (speed does not depend on weight values; avoids downloads). Run it on every
+GPU we use (local dev GPU, Kaggle T4, A40 if any); results are appended to docs/throughput.md
+and replace the estimated GPU-hours in PLAN.md section 3.
+
+Approximations (stated in the output):
+  - CLIP ViT-L/14 and DINOv3 ViT-L/16 are benchmarked as timm ViT-L/14 and ViT-L/16
+    (same depth/width; DINOv3 adds RoPE + 4 registers, small extra cost).
+  - "lora-proxy": backbone frozen except attention qkv weights, gradients flow through all
+    blocks; close to LoRA cost (LoRA adds tiny matmuls).
+  - NPR is benchmarked as resnet18 at 224 (NPR uses a truncated ResNet; real cost is lower).
+
+Usage:  python scripts/benchmark_throughput.py [--quick]
+"""
+from __future__ import annotations
+
+import argparse
+import datetime as dt
+import sys
+import time
+from pathlib import Path
+
+import torch
+import timm
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from dataprep.paths import DOCS  # noqa: E402
+
+MODELS = [
+    # name, timm id, kwargs, input size, modes
+    ("ViT-Ti/16 @224", "vit_tiny_patch16_224", {}, 224, ["train"]),
+    ("ViT-S/16 @224", "vit_small_patch16_224", {}, 224, ["train"]),
+    ("ViT-S/8 @112", "vit_small_patch8_224", {"img_size": 112}, 112, ["train"]),
+    ("ViT-S/8 @224 (A40 only)", "vit_small_patch8_224", {}, 224, ["train"]),
+    ("ResNet-50 @224", "resnet50", {}, 224, ["train"]),
+    ("NPR proxy (ResNet-18) @224", "resnet18", {}, 224, ["train"]),
+    ("CLIP ViT-L/14 @224", "vit_large_patch14_clip_224", {}, 224, ["infer", "lora-proxy"]),
+    ("DINOv3-like ViT-L/16 @224", "vit_large_patch16_224", {}, 224, ["infer", "lora-proxy"]),
+]
+
+
+def peak_gb() -> float:
+    return torch.cuda.max_memory_allocated() / 1e9
+
+
+def bench(model, size: int, mode: str, batch: int, steps: int) -> float:
+    dev = "cuda"
+    x = torch.randn(batch, 3, size, size, device=dev)
+    y = torch.randint(0, 2, (batch,), device=dev)
+    if mode == "infer":
+        model.eval()
+        ctx = torch.no_grad()
+    else:
+        model.train()
+        ctx = torch.enable_grad()
+        params = [p for p in model.parameters() if p.requires_grad]
+        opt = torch.optim.AdamW(params, lr=1e-4)
+        scaler = torch.amp.GradScaler()
+    with ctx:
+        for i in range(steps + 3):                     # 3 warm-up steps
+            if i == 3:
+                torch.cuda.synchronize()
+                t = time.perf_counter()
+            with torch.autocast("cuda", dtype=torch.float16):
+                out = model(x)
+                loss = torch.nn.functional.cross_entropy(out.float(), y) if mode != "infer" else None
+            if loss is not None:
+                opt.zero_grad(set_to_none=True)
+                scaler.scale(loss).backward()
+                scaler.step(opt)
+                scaler.update()
+        torch.cuda.synchronize()
+    return batch * steps / (time.perf_counter() - t)
+
+
+def run_one(tid, kw, size, mode, steps) -> tuple[int, float, float] | None:
+    for batch in (128, 64, 32, 16, 8, 4, 2):
+        torch.cuda.empty_cache()
+        torch.cuda.reset_peak_memory_stats()
+        model = timm.create_model(tid, pretrained=False, num_classes=2, **kw).cuda()
+        if mode == "lora-proxy":
+            for n, p in model.named_parameters():
+                p.requires_grad = (".qkv." in n) or n.startswith("head")
+            if hasattr(model, "set_grad_checkpointing"):
+                model.set_grad_checkpointing(True)
+        try:
+            ips = bench(model, size, mode, batch, steps)
+            return batch, ips, peak_gb()
+        except torch.OutOfMemoryError:
+            del model
+            continue
+        finally:
+            torch.cuda.empty_cache()
+    return None
+
+
+def main() -> None:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--quick", action="store_true", help="fewer steps")
+    args = ap.parse_args()
+    if not torch.cuda.is_available():
+        sys.exit("CUDA not available")
+    steps = 5 if args.quick else 20
+    gpu = torch.cuda.get_device_name(0)
+    vram = torch.cuda.get_device_properties(0).total_memory / 1e9
+    lines = ["", f"## {gpu} ({vram:.1f} GB), torch {torch.__version__}, timm {timm.__version__}, "
+                 f"fp16 autocast, {dt.date.today()}", "",
+             "| Model | Mode | Largest batch that fits | Images/s | Peak VRAM (GB) |", "|---|---|---|---|---|"]
+    for name, tid, kw, size, modes in MODELS:
+        for mode in modes:
+            r = run_one(tid, kw, size, mode, steps)
+            row = f"| {name} | {mode} | " + ("OOM at batch 2 | n/a | n/a |" if r is None else f"{r[0]} | {r[1]:.0f} | {r[2]:.2f} |")
+            print(row, flush=True)
+            lines.append(row)
+    lines.append("\nGPU-h for N samples = N / (images/s) / 3600. Excludes data loading; check the loader keeps up.")
+    out = DOCS / "throughput.md"
+    if not out.exists():
+        out.write_text("# Throughput benchmark\n\nGenerated by `scripts/benchmark_throughput.py` "
+                       "(random weights; see approximations in the script docstring).\n", encoding="utf-8")
+    with out.open("a", encoding="utf-8") as fh:
+        fh.write("\n".join(lines) + "\n")
+    print(f"\nappended to {out}")
+
+
+if __name__ == "__main__":
+    main()

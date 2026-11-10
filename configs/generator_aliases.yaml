@@ -1,0 +1,19 @@
+# Canonical generator names. Key = canonical (lowercase, hyphens); values = spellings seen in sources.
+# Purpose: the same model must never count as two generators (that would fake "unseen" results).
+# CF-Small names are canonicalised automatically (lowercase, '_'/' ' -> '-'); add cross-dataset aliases here.
+
+flux-schnell: [FLUX-schnell, flux.1-schnell, FLUX.1 [schnell]]
+flux-dev: [FLUX-dev, flux.1-dev]
+midjourney-v5: [MidjourneyV5_1, midjourney_v5, Midjourney V5]
+midjourney-v6: [MidjourneyV6_1]
+dalle3: [Dalle3, DALL-E 3, dall-e-3]
+dalle2: [Dalle2, DALL-E 2]
+imagen3: [Imagen3]
+sd-1.4: [stable_diffusion_v_1_4, CompVis/stable-diffusion-v1-4, SD1.4]
+sd-1.5: [stable_diffusion_v_1_5, runwayml/stable-diffusion-v1-5, SD1.5]
+glide: [Glide, glide]
+biggan: [BigGAN]
+adm: [ADM, guidedDiffusion, Guided Diffusion]   # ADM = "guided diffusion" (Dhariwal & Nichol); CONFIRM per source
+vqdm: [VQDM, VQDiffusion, VQ Diffusion]
+deepfloyd: [DeepFloyd, DeepFloyd-IF]
+qwen-image: [Qwen-Image, Qwen/Qwen-Image]

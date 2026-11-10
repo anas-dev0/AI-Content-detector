@@ -1,0 +1,74 @@
+# configs/splits.yaml  (NOT FROZEN YET; freeze at the end of week 1, then make read-only)
+# Built from the CF-Small metadata index by scripts/build_pool.py (seed 0).
+# Every experiment records sha256 of this file. See docs/evaluation_protocol.md.
+
+version: 1
+frozen: false
+frozen_on: null
+seed: 0
+generator_aliases: configs/generator_aliases.yaml
+pool_builder: scripts/build_pool.py   # --val-frac-systematic 0.1 --seed 0
+
+train:
+  fake:
+    cf_small:
+      generator_list: data/manifests/cf_small_train_generators_v1.txt   # 4295 generators
+      generator_list_sha256: 9c2a5d251deccb01494fead6cfc70e00a37f21e0a32638b1cf5e53f76443bc3d
+    genimage:
+      generators: []        # TODO week 1b: sd-1.4, adm, glide, wukong, vqdm, biggan (after licence check + audit)
+  real:
+    cf_small: random 90% of real images (seed 0)   # CF-Small has no real_source for reals
+
+val:                        # model selection + threshold calibration only
+  fake:
+    cf_small:
+      generator_list: data/manifests/cf_small_val_generators_v1.txt     # 479 = 476 held-out SD fine-tunes + deepfloyd, dit, stylegan3
+      generator_list_sha256: 12f88bee2f63766c61a0252f224000e3dbdeb88ea34f3309a4f5f3d75c440334
+    genimage:
+      generators: []        # TODO: midjourney-v5
+  real:
+    cf_small: remaining 10% of real images
+
+pool_rules:                 # shortcut fixes, see docs/audit_raw_cf_small.md vs docs/audit_pool_v1_train.md
+  drop_modes_other_than: RGB
+  min_megapixels: 0.1       # removes 256x256 images (almost no reals that small)
+  megapixel_buckets: [0.1, 0.8, inf]
+  match: equal real/fake count per (split, bucket); fakes round-robin over generators
+  jpeg_equalise: fakes get one JPEG pass with p = JPEG share of matched reals in the bucket, quality ~ measured real JPEG qualities
+  crop: one 256x256 crop, 8-aligned offset, seeded by sample_id, lossless PNG
+  nested_subsets: size_rank < N/2 per class  # 10k subset of 50k subset of 200k
+
+test:                       # NEVER used for training or model selection
+  sources:
+    cf_eval:
+      split: CompEval
+      id_list: data/manifests/cf_eval_fixed_ids_v1.txt    # TODO: fixed ~10k IDs from the CF-Eval index, seed 0
+    aigenbench:
+      windows: [newest]                                     # TODO
+    own_2026:
+      generators: [qwen-image]                              # TODO: + 1-2 commercial tools (free UI, ToS checked)
+    ntire26:
+      enabled: false        # Codabench registration only; public release UNVERIFIED
+    chameleon:
+      enabled: false        # enable when email access is granted
+  seen_in_test: []
+  real:
+    cf_eval: [raise, coco, ffhq, laion]
+    own_2026: [own_phone]
+
+held_out_real_sources: [raise, own_phone]
+
+dedup:
+  exact: sha256
+  near:
+    phash_hamming_max: 6
+    clip_cosine_min: 0.95
+  drop_from: test
+  scope: [train-vs-val, train-vs-test, val-vs-test]
+
+video:
+  split_key: video_id
+  dataset: genvideo
+  fps: 8
+  frames_per_clip: 16
+  reencode: {codec: h264, crf: 23, pix_fmt: yuv420p, short_side: 512}

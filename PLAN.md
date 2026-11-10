@@ -24,6 +24,12 @@ Re-usable earlier code: `aidet/residuals.py` and `aidet/spectrum.py` (high-pass 
 
 ---
 
+### Week-1 findings that changed the plan (2026-11-10)
+- **CF-Small has no commercial subset.** Validation is now 476 randomly held-out SD fine-tunes plus 3 held-out manual families (DeepFloyd, DiT, StyleGAN3). The commercial models (Midjourney, DALL·E, Imagen 3, Firefly, Ideogram, FLUX) are CF-Eval test generators.
+- **Raw CF-Small fails the shortcut audit badly:** a size-only classifier reaches AUROC 0.997 (`docs/audit_raw_cf_small.md`). The matched pool (scale buckets, JPEG equalisation, generator split) passes the gated audit (`docs/audit_pool_v1_train.md`). Pixel-level baselines on the built shards are still to run.
+- **Each CF Parquet file is a single row group**, so any balanced sample touches all 186 files (~260 GB). Shards are built in one streaming pass that downloads, processes and deletes each file. Better run on Kaggle (faster network) than locally.
+- **The local dev GPU is a GTX 1660 Ti 6 GB**, not the T1000 8 GB assumed above. Latency numbers will be reported for whichever local GPU we actually use.
+
 ## 1. Week-by-week plan
 
 Weekly rhythm: **Monday** 30-min sync (plan and blockers). **Thursday** async check-in. **Sunday** demo of the week's deliverables against the acceptance criteria. If a criterion fails, the cut list is applied the next Monday, not later.

@@ -36,6 +36,19 @@ A benchmark of detector families for AI-generated images, later extended to vide
    - Our own photos and the 2026 test set contain no people. Our own real photos are test-only.
    - RAISE never enters training.
 
+## Environment
+- **Python venv** lives outside OneDrive at `C:\Users\anasw\.venvs\aidet` (run `C:/Users/anasw/.venvs/aidet/Scripts/python.exe`).
+- **Large data** lives outside the repo in `AIDET_DATA_ROOT` (default `C:\aidet_data`; on Kaggle `/kaggle/working/aidet_data`). The repo is in a OneDrive-synced folder, so never write datasets, shards or checkpoints inside it.
+- **Local GPU on this machine:** GTX 1660 Ti 6 GB.
+- **Run tests:** `C:/Users/anasw/.venvs/aidet/Scripts/python.exe -m pytest tests -q -p no:cacheprovider`
+
+## Data pipeline (week 1)
+1. `scripts/index_hf_parquet.py`: metadata-only index of a HF Parquet dataset. Reads columns, skips `image_data`.
+2. `scripts/shortcut_audit.py`: metadata classifiers grouped by generator; the gate is `model_visible` ≤ 0.6.
+3. `scripts/build_pool.py`: scale-matched, JPEG-equalised, generator-split pool with nested `size_rank`.
+4. `scripts/build_shards.py`: one pass over the source files → lossless crop shards + manifest part.
+5. `scripts/benchmark_throughput.py`: images/s and VRAM per architecture on the current GPU → `docs/throughput.md`.
+
 ## Compute constraints
 - **Training** runs on free Kaggle/Colab T4 GPUs. Use fp16 AMP + GradScaler: the T4 has no bf16. Kaggle sessions end at 12 h, so checkpoint every ~30 min and make runs resumable.
 - **Local NVIDIA T1000 8 GB** (no tensor cores): debugging on tiny subsets, latency/VRAM measurement and the demo only. Never plan training on it.
@@ -54,6 +67,7 @@ A benchmark of detector families for AI-generated images, later extended to vide
 | Video (frame-level + pooling) | `detectors/video/` |
 
 Other folders:
+- `dataprep/`: data library (`paths.py`, `metadata.py`, `crops.py`, `manifest.py`)
 - `eval/`: metrics, bootstrap CIs, degradations, cost benchmarks
 - `api/`: FastAPI + ONNX Runtime
 - `app/`: Gradio demo

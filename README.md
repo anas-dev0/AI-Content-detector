@@ -68,7 +68,8 @@ The best model ships as an ONNX Runtime export, so the demo runs on CPU.
 
 ```
 configs/            experiment configs + splits.yaml (generator-disjoint, read-only once frozen)
-data/
+dataprep/           data library: metadata (JPEG-quality estimate, hashes), lossless crops, manifest validation
+data/               (in the repo only manifests are used; large data lives under AIDET_DATA_ROOT, outside OneDrive)
   raw/              downloaded / streamed source data (git-ignored)
   manifests/        versioned Parquet manifests (tracked)
   shards/           WebDataset tar shards of lossless crops (git-ignored)
