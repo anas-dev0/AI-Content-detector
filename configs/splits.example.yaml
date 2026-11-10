@@ -1,0 +1,78 @@
+# configs/splits.example.yaml
+# TEMPLATE. Copy to configs/splits.yaml in week 1, fill the TODOs from the real
+# generator lists (CF-Small `model_name`, CF-Eval, AI-GenBench), then set
+# frozen: true and make the file read-only (chmod 444 / git pre-commit hook).
+# Every experiment records sha256(configs/splits.yaml). Changing this file
+# after the freeze invalidates all results (see docs/evaluation_protocol.md).
+#
+# RULES
+#  - Split by GENERATOR, never by random image. Video: split by video_id.
+#  - train / val / test fake generators are pairwise disjoint, except those in
+#    test.seen_in_test (used only to report "seen" performance).
+#  - Test includes generators released AFTER the newest training generator.
+#  - Several real sources are mixed. Held-out real sources never enter training.
+
+version: 1
+frozen: false                 # set true at the week-1 freeze
+frozen_on: null               # YYYY-MM-DD
+seed: 0
+generator_aliases: configs/generator_aliases.yaml   # canonical names
+
+train:
+  fake:
+    cf_small:
+      subsets: [systematic, manual]     # thousands of SD-derivative models
+      exclude_generators: []            # TODO: anything listed under val/test below
+      max_generators: null
+    genimage:
+      generators: [sd-1.4, sd-1.5, adm, glide, wukong, vqdm, biggan]
+  real:
+    cf_small: [coco, ffhq, vision, lhq]  # real_source values in CF-Small
+    genimage: [imagenet]                 # JPEG-biased: equalise compression for both classes!
+  newest_train_generator_release: null   # TODO: date, from cited sources only
+
+val:                                     # model selection + threshold calibration only
+  fake:
+    cf_small:
+      subsets: [commercial]              # TODO: confirm commercial models are absent from train
+    genimage:
+      generators: [midjourney-v5]
+  real:
+    cf_small: [coco]                     # TODO: use parents not used in train (parent_id disjoint)
+
+test:                                    # NEVER used for training or model selection
+  sources:
+    cf_eval:
+      split: CompEval
+      id_list: data/manifests/cf_eval_fixed_ids_v1.txt   # fixed ~10k IDs, seed 0
+    aigenbench:
+      windows: [newest]                  # TODO: list window IDs/generators after the newest train release
+    own_2026:
+      generators: [qwen-image]           # TODO: + 1-2 commercial tools (free UI, ToS checked)
+    ntire26:
+      enabled: false                     # UNVERIFIED public release; enable only if downloadable
+    chameleon:
+      enabled: false                     # enable when email access is granted
+  seen_in_test: []                       # generators intentionally in both train and test, e.g. [sd-1.4]
+  real:
+    cf_eval: [raise, coco, ffhq, laion]
+    own_2026: [own_phone]
+
+held_out_real_sources: [raise, own_phone]   # must never have split == train
+
+dedup:
+  exact: sha256
+  near:
+    phash_hamming_max: 6                 # tune in week 1 on a labelled sample of pairs
+    clip_cosine_min: 0.95
+  drop_from: test                        # violators are removed from test, not train
+  scope: [train-vs-val, train-vs-test, val-vs-test]
+
+video:                                   # week 4 only
+  split_key: video_id
+  dataset: genvideo                      # or genvidbench
+  train_generators: []                   # TODO from the dataset's official train list
+  test_generators: []                    # TODO from the official test list (disjoint)
+  fps: 8
+  frames_per_clip: 16
+  reencode: {codec: h264, crf: 23, pix_fmt: yuv420p, short_side: 512}   # same for real and fake
