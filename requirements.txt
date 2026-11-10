@@ -1,0 +1,16 @@
+# Week 1 (already on the system Python): numpy, pillow
+numpy>=2.0
+pillow>=10.0
+
+# Weeks 2+ (install later; PyTorch needs the CUDA 12.8 index for the RTX 5050):
+#   pip install torch torchvision --index-url https://download.pytorch.org/whl/cu128
+#   pip install -r requirements.txt
+timm>=1.0
+open_clip_torch>=2.24
+scikit-learn>=1.4
+matplotlib>=3.8
+pandas>=2.0
+pyyaml>=6.0
+tqdm>=4.66
+opencv-python-headless>=4.9
+huggingface_hub>=0.23

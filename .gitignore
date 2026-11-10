@@ -1,0 +1,10 @@
+.venv/
+__pycache__/
+*.pyc
+demo_data/
+figures/*.csv
+data/
+runs/
+checkpoints/
+*.pt
+*.pth

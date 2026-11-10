@@ -32,6 +32,7 @@ from PIL import Image
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT / "scripts"))
 
 from aidet import preprocess, residuals, spectrum, viz  # noqa: E402
 import make_spectrum_figure  # noqa: E402  (same folder)
@@ -154,7 +155,10 @@ def main():
     spec_nn, _ = spectrum.average_spectrum(preprocess.iter_images(DEMO / "fake_nearest"), 224, 2)
     g_real, g_fake, g_nn = (spectrum.grid_peak_score(s) for s in (spec_real, spec_fake, spec_nn))
     ok &= check(g_fake > g_real + 0.5, f"grid-peak score: real {g_real:.2f} vs checkerboard fake {g_fake:.2f}")
-    ok &= check(g_nn > g_real + 0.5, f"grid-peak score: real {g_real:.2f} vs nearest fake {g_nn:.2f}")
+    # Nearest-neighbour x2 = zero insertion + 2-px box filter, whose response is 0 at Nyquist, so it
+    # does NOT produce a spectral peak; its fingerprint is caught by NPR (check 1), not by the FFT.
+    # This is the lesson of the project: different generators need different fingerprint views.
+    ok &= check(g_nn < 1.0, f"grid-peak score: nearest fake {g_nn:.2f} stays low (no Nyquist peak, by theory)")
     hf = lambda s: spectrum.band_energy(s, 0.6, 1.0)  # noqa: E731
     print(f"        high-freq energy: real {hf(spec_real):.2f}, checkerboard {hf(spec_fake):.2f}, nearest {hf(spec_nn):.2f}")
 
@@ -168,7 +172,7 @@ def main():
     panel = viz.panel(
         [np.asarray(crop),
          viz.residual_to_rgb(residuals.npr_residual(crop), gain=6),
-         viz.residual_to_rgb(residuals.srm_residual(crop), gain=2),
+         viz.residual_to_rgb(residuals.srm_residual(crop), gain=0.5),
          viz.spectrum_to_rgb(spectrum.log_fft_spectrum(crop))],
         ["fake crop", "NPR residual", "SRM residual", "log-FFT"],
     )
