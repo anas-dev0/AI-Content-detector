@@ -9,7 +9,13 @@ Per image:
   2. fakes flagged pre_jpeg get one JPEG pass, quality drawn from the measured qualities of
      real JPEGs in the pool (real files are processed first to build that distribution)
   3. one 8-aligned random 256x256 crop (seeded by sample_id), stored as lossless PNG
-Output: SHARDS/cf_small/cf_small-<split>-<n>.tar (+ .json per sample) and a manifest part.
+Output: SHARDS/cf_small/cf_small-<split>-<file>-<n>.tar (+ .json per sample) and a manifest part.
+
+Resumable: every source file gets its own shards and its own manifest part in
+SHARDS/cf_small/_progress/. A file counts as done only once its part is written, so Ctrl+C or a
+crash loses at most the file in progress; rerun the same command to continue. Results do not
+depend on interruptions: JPEG qualities for pre_jpeg fakes are drawn with a per-sample RNG from
+the qualities of the real files, which are all processed before any fake-heavy file.
 
 Usage:
     python scripts/build_shards.py --train-per-class 100000 --val-per-class 10000
@@ -21,7 +27,6 @@ import argparse
 import io
 import json
 import os
-import random
 import sys
 import tarfile
 import time
@@ -114,25 +119,43 @@ def main() -> None:
     cap = pool.split.map({"train": args.train_per_class, "val": args.val_per_class})
     sel = pool[pool.size_rank < cap].copy()
     # reals first so the JPEG-quality distribution exists before fakes need it
-    order = sel.groupby("hf_file").label.mean().sort_values().index.tolist()
-    if args.max_files:                        # smoke test: half real-heavy, half fake-heavy files
+    stats = sel.groupby("hf_file").label.agg(["mean", "size"])
+    order = stats.sort_values("mean").index.tolist()
+    if args.max_files:                        # smoke test: the busiest real-heavy and fake-heavy files
         k = args.max_files
-        order = order[: (k + 1) // 2] + order[len(order) - k // 2:]
+        real_f = stats[stats["mean"] < 0.5].sort_values("size", ascending=False).index[: (k + 1) // 2]
+        fake_f = stats[stats["mean"] >= 0.5].sort_values("size", ascending=False).index[: k // 2]
+        order = [f for f in order if f in set(real_f) | set(fake_f)]
     print(f"selected {len(sel)} rows in {sel.hf_file.nunique()} files; processing {len(order)} files", flush=True)
 
     tmp = DATA_ROOT / "tmp_download"
     outdir = SHARDS / "cf_small"
-    writers = {s: ShardWriter(outdir, f"cf_small-{s}") for s in ("train", "val")}
-    real_q: list[float] = []
-    rng = random.Random(0)
-    manifest, t0, n_done, n_bytes = [], time.time(), 0, 0
+    progress = outdir / "_progress"
+    params = {"pool": Path(args.pool).name, "train_per_class": args.train_per_class,
+              "val_per_class": args.val_per_class, "max_files": args.max_files}
+    progress.mkdir(parents=True, exist_ok=True)
+    pfile = progress / "params.json"
+    if pfile.exists() and json.loads(pfile.read_text()) != params:
+        sys.exit(f"{outdir} holds a build with different settings {json.loads(pfile.read_text())}.\n"
+                 f"Delete {outdir} to start this build ({params}).")
+    pfile.write_text(json.dumps(params))
+
+    def part_path(fname: str) -> Path:
+        return progress / (Path(fname).stem + ".parquet")
+
+    done = [f for f in order if part_path(f).exists()]
+    real_q = [float(q) for f in done for q in pd.read_parquet(part_path(f)).query("label == 0").jpeg_q.dropna()]
+    todo = [f for f in order if f not in set(done)]
+    if done:
+        print(f"resuming: {len(done)} files already done, {len(todo)} to go", flush=True)
+    t0, n_done, n_bytes = time.time(), 0, 0
 
     with ProcessPoolExecutor(args.workers) as cpu, ThreadPoolExecutor(1) as net:
-        nxt = net.submit(download, order[0], tmp)
-        for i, fname in enumerate(order):
+        nxt = net.submit(download, todo[0], tmp) if todo else None
+        for i, fname in enumerate(todo):
             path = nxt.result()
-            if i + 1 < len(order):
-                nxt = net.submit(download, order[i + 1], tmp)          # prefetch the next file
+            if i + 1 < len(todo):
+                nxt = net.submit(download, todo[i + 1], tmp)           # prefetch the next file
             rows = sel[sel.hf_file == fname]
             col = pq.read_table(path, columns=["image_data"]).column("image_data")
             jobs = []
@@ -141,8 +164,11 @@ def main() -> None:
                 if r["pre_jpeg"]:
                     if not real_q:
                         raise RuntimeError("no real JPEG qualities measured yet; process real files first")
-                    q = rng.choice(real_q)
+                    q = image_rng(1, r["sample_id"]).choice(real_q)
                 jobs.append((r, col[int(r["hf_row"])].as_py(), q))
+            stem = Path(fname).stem.rsplit("_", 1)[-1]
+            writers = {s: ShardWriter(outdir, f"cf_small-{s}-f{stem}") for s in ("train", "val")}
+            manifest = []
             for res in cpu.map(process, jobs, chunksize=32):
                 if res is None:
                     continue
@@ -166,20 +192,27 @@ def main() -> None:
                 manifest.append(rec)
                 n_done += 1
                 n_bytes += len(res["png"])
+            for w in writers.values():
+                w.close()
+            tmp_part = part_path(fname).with_suffix(".tmp")
+            pd.DataFrame(manifest).to_parquet(tmp_part, index=False)
+            os.replace(tmp_part, part_path(fname))                     # file is now "done"
             size_gb = path.stat().st_size / 1e9
             if not args.keep_files:
                 path.unlink()
             el = time.time() - t0
-            print(f"[{i + 1}/{len(order)}] {fname} ({size_gb:.2f} GB): {len(rows)} rows | total {n_done} crops, "
-                  f"{n_bytes / max(n_done, 1) / 1e3:.0f} KB/crop, {el / 60:.1f} min elapsed", flush=True)
+            eta = el / (i + 1) * (len(todo) - i - 1)
+            print(f"[{len(done) + i + 1}/{len(order)}] {fname} ({size_gb:.2f} GB): {len(rows)} rows | this session "
+                  f"{n_done} crops, {n_bytes / max(n_done, 1) / 1e3:.0f} KB/crop, {el / 60:.1f} min elapsed, "
+                  f"~{eta / 3600:.1f} h left", flush=True)
 
-    for w in writers.values():
-        w.close()
+    parts = [pd.read_parquet(part_path(f)) for f in order]
+    manifest = pd.concat([p for p in parts if len(p)], ignore_index=True)
+    INDEX.mkdir(parents=True, exist_ok=True)
     out = INDEX / "cf_small_shards_manifest.parquet"
-    pd.DataFrame(manifest).to_parquet(out, index=False)
+    manifest.to_parquet(out, index=False)
     np.save(INDEX / "real_jpeg_q.npy", np.array(real_q))
-    print(f"wrote {out} ({len(manifest)} rows); avg crop {n_bytes / max(n_done, 1) / 1e3:.0f} KB; "
-          f"{(time.time() - t0) / 60:.1f} min")
+    print(f"wrote {out} ({len(manifest)} rows); {manifest.groupby(['split', 'label']).size().to_dict()}")
 
 
 if __name__ == "__main__":

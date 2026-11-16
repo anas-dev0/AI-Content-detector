@@ -1,0 +1,16 @@
+# Smoke test of the training skeleton on SYNTHETIC toy shards (never reportable).
+#   python -m training.toy --out C:/aidet_data/toy --train-per-class 2000 --val-per-class 500
+#   python -m training.train --config configs/exp/smoke_toy_gpu.yaml
+run: smoke_toy_gpu
+seed: 0
+data:
+  manifest: C:/aidet_data/toy/toy_manifest.parquet
+  shards_root: C:/aidet_data/toy
+  train_images: null
+  input_size: 224
+  num_workers: 4
+model:
+  name: vit_tiny_patch16_224
+  kwargs: {drop_path_rate: 0.1}
+optim: {lr: 5.0e-4, lr_ref_batch: 512, warmup_samples: 8000}
+train: {batch_size: 128, total_samples: 40000, eval_every_samples: 10000, log_every_steps: 20, ckpt_minutes: 5, amp: true}

@@ -1,0 +1,20 @@
+{
+  "run": "smoke_toy_gpu",
+  "started": "2026-11-16T21:02:52.091381",
+  "manifest": "C:\\aidet_data\\toy\\toy_manifest.parquet",
+  "manifest_sha256": "d5407f6e7e99679e0ceaf2c292fdc629ef6101a3a2b31a7cecd7d353cc650483",
+  "splits": "C:\\Users\\hadil\\OneDrive\\Documents\\Projects\\Computer Vision\\configs\\splits.yaml",
+  "splits_sha256": "e20fd7bd9d671e3d3e0a5280fdf5ede0dedacd55505389f5ac8bb7a0c2b8d64d",
+  "splits_frozen": false,
+  "git_commit": "18f30f7ae86e16046caa31338aae47bb3a00a3ab",
+  "git_dirty": true,
+  "reportable": false,
+  "not_reportable_because": [
+    "splits.yaml not frozen",
+    "manifest is not a versioned data/manifests/manifest_v*.parquet",
+    "git working tree dirty or unknown"
+  ],
+  "torch": "2.11.0+cu128",
+  "timm": "1.0.31",
+  "device": "NVIDIA GeForce RTX 5050 Laptop GPU"
+}

@@ -1,0 +1,32 @@
+# S0 sanity run (PLAN.md section 4): ViT-Ti/16, RGB, native 224 crops, 10k images.
+# Must beat chance on val before the T5 ablations start.
+# Blocked until: real shards + versioned manifest exist and the shortcut audit (D1) passes.
+run: s0_vit_ti16_10k
+seed: 0
+splits: configs/splits.yaml
+data:
+  manifest: data/manifests/manifest_vYYYYMMDD_1.parquet   # TODO: versioned manifest from build_shards.py
+  train_images: 10000          # nested subset: size_rank < 5000 per class
+  val_images: null             # whole val split
+  input_size: 224
+  geometry: crop               # resize = ablation A2 only
+  num_workers: 4
+aug: {hflip: true, jpeg_p: 0.5, jpeg_q: [60, 100], blur_p: 0.1, blur_sigma: [0.1, 3.0]}
+model:
+  name: vit_tiny_patch16_224
+  kwargs: {drop_path_rate: 0.1}
+optim:
+  lr: 5.0e-4                   # x batch/512
+  lr_ref_batch: 512
+  weight_decay: 0.05
+  betas: [0.9, 0.999]
+  warmup_samples: 50000        # 5-epoch-equivalent at 10k
+  clip_grad: 1.0
+  label_smoothing: 0.1
+train:
+  batch_size: 128
+  total_samples: 1000000       # 10k -> 1M samples seen
+  eval_every_samples: 100000
+  ckpt_minutes: 30
+  max_minutes: 680             # stop cleanly before Kaggle's 12-h limit; rerun to resume
+  amp: true
