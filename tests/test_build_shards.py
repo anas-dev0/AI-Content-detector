@@ -1,7 +1,7 @@
 """Checks the streaming reader and per-image processing of scripts/build_shards.py
 on a synthetic Parquet file with the same layout as Community Forensics (one row group)."""
-import importlib.util
 import io
+import sys
 from pathlib import Path
 
 import numpy as np
@@ -9,9 +9,9 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 from PIL import Image
 
-spec = importlib.util.spec_from_file_location("build_shards", Path(__file__).resolve().parents[1] / "scripts" / "build_shards.py")
-bs = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(bs)
+# import as a normal module so worker processes (spawn) can import it too
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+import build_shards as bs  # noqa: E402
 
 
 def _png(seed: int, w=320, h=288) -> bytes:
