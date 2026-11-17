@@ -13,8 +13,18 @@ Per image:
   2. fakes flagged pre_jpeg get one JPEG pass, quality drawn from the measured qualities of
      real JPEGs in the pool (real files are processed first to build that distribution)
   3. one 8-aligned random 256x256 crop (seeded by sample_id), stored as lossless PNG
+<<<<<<< HEAD
 Output: SHARDS/cf_small/cf_small-<split>-<n>.tar (+ .json per sample) and
         SHARDS/cf_small/cf_small_shards_manifest.parquet
+=======
+Output: SHARDS/cf_small/cf_small-<split>-<file>-<n>.tar (+ .json per sample) and a manifest part.
+
+Resumable: every source file gets its own shards and its own manifest part in
+SHARDS/cf_small/_progress/. A file counts as done only once its part is written, so Ctrl+C or a
+crash loses at most the file in progress; rerun the same command to continue. Results do not
+depend on interruptions: JPEG qualities for pre_jpeg fakes are drawn with a per-sample RNG from
+the qualities of the real files, which are all processed before any fake-heavy file.
+>>>>>>> fdf6b3f4d0493d4148c0d4d847f43b43a5e147f6
 
 Usage:
     python scripts/build_shards.py --train-per-class 25000 --val-per-class 5000
@@ -27,7 +37,6 @@ import hashlib
 import io
 import json
 import os
-import random
 import sys
 import tarfile
 import time
@@ -155,7 +164,9 @@ def main() -> None:
     order = sel.groupby("hf_file").label.mean().sort_values(kind="stable").index.tolist()
     if args.max_files:
         k = args.max_files
-        order = order[: (k + 1) // 2] + order[len(order) - k // 2:]
+        real_f = stats[stats["mean"] < 0.5].sort_values("size", ascending=False).index[: (k + 1) // 2]
+        fake_f = stats[stats["mean"] >= 0.5].sort_values("size", ascending=False).index[: k // 2]
+        order = [f for f in order if f in set(real_f) | set(fake_f)]
     print(f"selected {len(sel)} rows in {sel.hf_file.nunique()} files; processing {len(order)} files", flush=True)
 
     outdir = SHARDS / "cf_small"

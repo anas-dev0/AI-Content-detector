@@ -1,0 +1,13 @@
+{
+  "samples_seen": 20096,
+  "val_loss": 0.06988614273071289,
+  "val_auroc": 1.0,
+  "val_ap": 1.0,
+  "n_val": 1000,
+  "time": "2026-11-16T21:06:04.570394",
+  "manifest": "C:\\aidet_data\\toy\\toy_manifest.parquet",
+  "manifest_sha256": "d5407f6e7e99679e0ceaf2c292fdc629ef6101a3a2b31a7cecd7d353cc650483",
+  "splits_sha256": "e20fd7bd9d671e3d3e0a5280fdf5ede0dedacd55505389f5ac8bb7a0c2b8d64d",
+  "git_commit": "18f30f7ae86e16046caa31338aae47bb3a00a3ab",
+  "reportable": false
+}

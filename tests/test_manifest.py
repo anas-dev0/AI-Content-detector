@@ -46,3 +46,18 @@ def test_duplicates_and_parent_and_heldout():
 def test_jpeg_q_consistency():
     errs = validate(_df([_row(format="jpeg", jpeg_q=None)]))
     assert any("jpeg_q" in e for e in errs)
+
+
+# ---- every committed versioned manifest must satisfy the invariants against configs/splits.yaml
+import pytest  # noqa: E402
+
+from dataprep.manifest import load_splits  # noqa: E402
+from dataprep.paths import CONFIGS, MANIFESTS  # noqa: E402
+
+_VERSIONS = sorted(MANIFESTS.glob("manifest_v*.parquet"))
+
+
+@pytest.mark.skipif(not _VERSIONS, reason="no versioned manifest yet")
+@pytest.mark.parametrize("path", _VERSIONS, ids=lambda p: p.name)
+def test_versioned_manifest_valid(path):
+    assert validate(pd.read_parquet(path), load_splits(CONFIGS / "splits.yaml")) == []
