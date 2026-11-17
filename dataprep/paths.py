@@ -17,6 +17,9 @@ INDEX = DATA_ROOT / "index"        # metadata-only indexes of remote datasets
 SHARDS = DATA_ROOT / "shards"      # WebDataset tar shards (lossless crops)
 DEGRADED = DATA_ROOT / "degraded"  # offline, seeded degraded test sets
 OWN_2026 = DATA_ROOT / "own_2026"  # our generated + real photos
+# Temporary downloads (deleted after use). On Kaggle point this outside /kaggle/working so it
+# does not count against the saved-output limit.
+TMP = Path(os.environ.get("AIDET_TMP", str(DATA_ROOT / "tmp_download")))
 
 MANIFESTS = REPO_ROOT / "data" / "manifests"   # tracked in git
 CONFIGS = REPO_ROOT / "configs"

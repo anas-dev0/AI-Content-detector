@@ -24,7 +24,7 @@ import numpy as np
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from dataprep.paths import INDEX  # noqa: E402
+from dataprep.paths import INDEX, MANIFESTS  # noqa: E402
 
 MP_BINS = [0.1, 0.8, 100.0]                  # buckets: M = (0.1, 0.8], L = (0.8, inf)
 MP_LABELS = ["M", "L"]
@@ -38,7 +38,8 @@ def canonical(name: str) -> str:
 
 
 def load_index(path: Path) -> pd.DataFrame:
-    df = pd.read_parquet(path)
+    # Deterministic order regardless of how the index was written (random seeds act on row order).
+    df = pd.read_parquet(path).sort_values(["hf_file", "hf_row"], ignore_index=True)
     df = df.assign(width=df.resolution.str[0].astype(int), height=df.resolution.str[1].astype(int))
     df["mp"] = df.width * df.height / 1e6
     df = df[(df["mode"] == "RGB") & (df.mp > MP_BINS[0])].copy()
@@ -91,7 +92,7 @@ def main() -> None:
     ap.add_argument("--index", default=str(INDEX / "cf_small_index.parquet"))
     ap.add_argument("--val-frac-systematic", type=float, default=0.1)
     ap.add_argument("--seed", type=int, default=0)
-    ap.add_argument("--out", default=str(INDEX / "cf_small_pool.parquet"))
+    ap.add_argument("--out", default=str(MANIFESTS / "cf_small_pool_v1.parquet"))   # tracked: Kaggle reads the same file
     args = ap.parse_args()
 
     rng = np.random.default_rng(args.seed)
@@ -110,6 +111,12 @@ def main() -> None:
           " fake(pre_jpeg):", round(float(f.pre_jpeg.mean()), 3))
     tr = set(f[f.split == "train"].generator); va = set(f[f.split == "val"].generator)
     print("train/val generator overlap:", len(tr & va))
+
+    import hashlib
+    for split, gens in (("train", tr), ("val", va)):
+        p = MANIFESTS / f"cf_small_{split}_generators_v1.txt"
+        p.write_text("\n".join(sorted(gens)) + "\n", encoding="utf-8")
+        print(f"{p.name}: {len(gens)} generators, sha256 {hashlib.sha256(p.read_bytes()).hexdigest()}")
 
 
 if __name__ == "__main__":

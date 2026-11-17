@@ -88,6 +88,7 @@ api/                FastAPI inference service (ONNX Runtime)
 app/                Gradio demo
 experiments/        one folder per run: config, manifest version, metrics JSON, logs
 scripts/            data download / sharding / audit entry points
+notebooks/          Kaggle notebooks (01: build training shards on a free CPU notebook)
 tests/              unit tests (splits disjointness, manifest schema, metric correctness)
 docs/               protocol, manifest schema, data sources, literature
 ```

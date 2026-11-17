@@ -8,6 +8,7 @@ frozen_on: null
 seed: 0
 generator_aliases: configs/generator_aliases.yaml
 pool_builder: scripts/build_pool.py   # --val-frac-systematic 0.1 --seed 0
+pool_file: data/manifests/cf_small_pool_v1.parquet
 
 train:
   fake:

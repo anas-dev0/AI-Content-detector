@@ -62,7 +62,8 @@ def main() -> None:
             if i % 20 == 0 or i == len(files):
                 print(f"  {i}/{len(files)} files indexed", flush=True)
 
-    df = pd.concat(parts, ignore_index=True)
+    # Files finish in random order (threads); sort so the index is identical on every run/machine.
+    df = pd.concat(parts, ignore_index=True).sort_values(["hf_file", "hf_row"], ignore_index=True)
     df["source_repo"] = args.repo
     out = INDEX / f"{args.name}_index.parquet"
     df.to_parquet(out, index=False)

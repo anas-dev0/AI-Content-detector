@@ -46,7 +46,9 @@ A benchmark of detector families for AI-generated images, later extended to vide
 1. `scripts/index_hf_parquet.py`: metadata-only index of a HF Parquet dataset. Reads columns, skips `image_data`.
 2. `scripts/shortcut_audit.py`: metadata classifiers grouped by generator; the gate is `model_visible` ≤ 0.6.
 3. `scripts/build_pool.py`: scale-matched, JPEG-equalised, generator-split pool with nested `size_rank`.
-4. `scripts/build_shards.py`: one pass over the source files → lossless crop shards + manifest part.
+4. `scripts/build_shards.py`: one pass over the source files → lossless crop shards + manifest. Streams 128 images at a time (bounded RAM). Run it on Kaggle via `notebooks/kaggle_01_build_shards.ipynb` (CPU, internet on), not locally: the source files are 1.4–4 GB each and the local disk is nearly full.
+   - The pool is tracked at `data/manifests/cf_small_pool_v1.parquet` (deterministic, rebuilt by `build_pool.py`), so Kaggle uses the exact same selection.
+   - Kaggle clones the repo from GitHub, so **push before running a notebook**.
 5. `scripts/benchmark_throughput.py`: images/s and VRAM per architecture on the current GPU → `docs/throughput.md`.
 
 ## Compute constraints
