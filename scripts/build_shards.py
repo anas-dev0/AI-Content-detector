@@ -164,6 +164,7 @@ def main() -> None:
     order = sel.groupby("hf_file").label.mean().sort_values(kind="stable").index.tolist()
     if args.max_files:
         k = args.max_files
+        stats = sel.groupby("hf_file").label.agg(["mean", "size"])    # fake share + selected rows per file
         real_f = stats[stats["mean"] < 0.5].sort_values("size", ascending=False).index[: (k + 1) // 2]
         fake_f = stats[stats["mean"] >= 0.5].sort_values("size", ascending=False).index[: k // 2]
         order = [f for f in order if f in set(real_f) | set(fake_f)]
